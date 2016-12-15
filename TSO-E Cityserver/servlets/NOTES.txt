@@ -1,0 +1,1 @@
+NOTE: the .htaccess file requires Apache's rewrite and header modules to be loaded.
