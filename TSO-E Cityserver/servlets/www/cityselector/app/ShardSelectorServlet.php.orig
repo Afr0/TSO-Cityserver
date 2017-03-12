@@ -1,0 +1,9 @@
+<?php echo '<?xml version="1.0" encoding="UTF-8" ?>
+<Shard-Selection>
+  <Connection-Address>localhost:49</Connection-Address>
+  <Authorization-Ticket>2002</Authorization-Ticket>
+  <PlayerID>42</PlayerID>
+  <ConnectionID>20301</ConnectionID>
+  <EntitlementLevel>3</EntitlementLevel>
+  <AvatarID>1337</AvatarID>
+</Shard-Selection>'; ?>
