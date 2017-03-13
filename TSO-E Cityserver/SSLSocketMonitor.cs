@@ -19,9 +19,9 @@ namespace TSO_E_Cityserver
         private int m_Port;
         private ManualResetEvent m_ConnectionResetEvent = new ManualResetEvent(false);
 
-        public event EventHandler<SslSocketEventArgs> Connected;
-        public event EventHandler<SslSocketEventArgs> Disconnected;
-        public event EventHandler<SslSocketEventArgs> ReceivedData;
+        public event EventHandler<Client> Connected;
+        public event EventHandler<Client> Disconnected;
+        public event EventHandler<Client> ReceivedData;
 
         //This is the value set in HostOnlinePDU specifying the host's maximum packet size.
         private static int BUFFER_SIZE = 32767;
@@ -48,7 +48,7 @@ namespace TSO_E_Cityserver
             {
                 //Set the event to nonsignaled state.
                 m_ConnectionResetEvent.Reset();
-                m_Socket.BeginAccept(AcceptConnections, new SslSocketEventArgs());
+                m_Socket.BeginAccept(AcceptConnections, new Client());
 
                 //Wait until a connection is made before continuing.
                 m_ConnectionResetEvent.WaitOne();
@@ -57,13 +57,13 @@ namespace TSO_E_Cityserver
 
         private void AcceptConnections(IAsyncResult result)
         {
-            var resultWrapper = (SslSocketEventArgs)result.AsyncState;
+            var resultWrapper = (Client)result.AsyncState;
             try
             {
                 resultWrapper.ReplaceSslStream(result, m_Socket);
                 resultWrapper.BeginAuthenticateAsServer(EndAuthenticate);
 
-                m_Socket.BeginAccept(AcceptConnections, new SslSocketEventArgs());
+                m_Socket.BeginAccept(AcceptConnections, new Client());
             }
             catch (Exception e)
             {
@@ -79,7 +79,7 @@ namespace TSO_E_Cityserver
 
         private void EndAuthenticate(IAsyncResult result)
         {
-            var resultWrapper = (SslSocketEventArgs)result.AsyncState;
+            var resultWrapper = (Client)result.AsyncState;
             try
             {
                 try
@@ -124,7 +124,7 @@ namespace TSO_E_Cityserver
 
         private void ReceiveData(IAsyncResult result)
         {
-            var resultWrapper = (SslSocketEventArgs)result.AsyncState;
+            var resultWrapper = (Client)result.AsyncState;
             try
             {
                 var size = resultWrapper.EndRead(result);
@@ -154,7 +154,7 @@ namespace TSO_E_Cityserver
             }
         }
 
-        private void ProcessBuffer(SslSocketEventArgs Client)
+        private void ProcessBuffer(Client Client)
         {
             while(m_CurrentlyReceived >= PacketSize)
             {
@@ -207,7 +207,7 @@ namespace TSO_E_Cityserver
         /// Multiple Voltron packets were sent in a Aries frame.
         /// </summary>
         /// <param name="PacketBuf">The packet buffer containing the packets to process.</param>
-        private void ProcessVoltronPackets(SslSocketEventArgs Client, byte[] PacketBuf)
+        private void ProcessVoltronPackets(Client Client, byte[] PacketBuf)
         {
             VoltronHeader Header = ReadVoltronHeader(PacketBuf, 12);
             //bool ReadAriesHeader = true;

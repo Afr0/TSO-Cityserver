@@ -9,7 +9,7 @@ namespace TSO_E_Cityserver.Database
     {
         public string Username;
         public string Password; //A hashed version of the password.
-        public string SessionID;
+        public uint AuthTicket;
         public int PreferedLanguageID;
         public string AvatarID1, AvatarID2, AvatarID3;
         public Avatar[] Avatars;

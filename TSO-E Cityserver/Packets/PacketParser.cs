@@ -14,7 +14,7 @@ namespace TSO_E_Cityserver.Packets
         private static readonly ILog m_Logger = 
             LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
-        public async static void OnReceivedPacket21(SslSocketEventArgs Client, AriesPacket Packet)
+        public async static void OnReceivedPacket21(Client Client, AriesPacket Packet)
         {
             string AvatarID = Packet.ReadNullString(112);
             string AriesClientVersion = Packet.ReadNullString(80);
@@ -24,7 +24,7 @@ namespace TSO_E_Cityserver.Packets
             Packet.ReadByte(); //Unknown.
             string ServiceIdent = Packet.ReadNullString(3);
             Packet.ReadUInt16(); //Unknown.
-            string SessionID = Packet.ReadNullString((int)(Packet.PacketSize - 331));
+            uint AuthTicket = uint.Parse(Packet.ReadNullString((int)Packet.PacketSize - 331));
             Packet.ReadBytes(7); //Reserved.
 
             Console.WriteLine("AvatarID: " + "'" + AvatarID + "'");
@@ -32,7 +32,7 @@ namespace TSO_E_Cityserver.Packets
             Console.WriteLine("Email: " + "'" + Email + "'");
             Console.WriteLine("Authserv: " + "'" + Authserv + "'");
             Console.WriteLine("ServiceIdent: " + "'" + ServiceIdent + "'");
-            Console.WriteLine("SessionID: " + "'" + SessionID + "'");
+            Console.WriteLine("AuthTicket: " + "'" + AuthTicket + "'");
 
             bool SessionIDAcknowledged = false;
             Account PlayerAccount = new Account();
@@ -40,7 +40,8 @@ namespace TSO_E_Cityserver.Packets
             IEnumerable<Account> Accs = await DatabaseFacade.GetAccountsAsync();
             foreach(Account Acc in Accs)
             {
-                if (string.Equals(Acc.SessionID, SessionID, StringComparison.CurrentCultureIgnoreCase))
+                //if (string.Equals(Acc.AuthTicket, AuthTicket, StringComparison.CurrentCultureIgnoreCase))
+                if(Acc.AuthTicket == AuthTicket)
                 {
                     SessionIDAcknowledged = true;
                     PlayerAccount = Acc;
@@ -65,7 +66,7 @@ namespace TSO_E_Cityserver.Packets
                 await Client.SendData(new ServerByePDU().ToArray());
         }
 
-        public static void OnReceivedClientOnlinePDU(SslSocketEventArgs Client, AriesPacket Packet)
+        public static void OnReceivedClientOnlinePDU(Client Client, AriesPacket Packet)
         {
             Client.VersionInfo.m_majorVersion = Packet.ReadByte();
             Client.VersionInfo.m_minorVersion = Packet.ReadByte();
@@ -89,7 +90,7 @@ namespace TSO_E_Cityserver.Packets
             Console.WriteLine("Client's art version: " + Client.VersionInfo.m_artVersion);
         }
 
-        public static void OnReceivedDBServiceWrapperPDU(SslSocketEventArgs Client, VoltronPacket Packet)
+        public static void OnReceivedDBServiceWrapperPDU(Client Client, VoltronPacket Packet)
         {
             uint SendingAvatarID = Packet.ReadUInt32();
             uint StringID = Packet.ReadUInt32();
@@ -154,7 +155,7 @@ namespace TSO_E_Cityserver.Packets
             }
         }
 
-        public static async void OnReceivedDBRequestWrapperPDU(SslSocketEventArgs Client, VoltronPacket Packet)
+        public static async void OnReceivedDBRequestWrapperPDU(Client Client, VoltronPacket Packet)
         {
             uint SendingAvatarID = Packet.ReadUInt32();
             string m_ariesID = Packet.ReadVoltronString();
@@ -423,7 +424,7 @@ namespace TSO_E_Cityserver.Packets
             }
         }
 
-        public static async void OnReceivedRSGZWrapperPDU(SslSocketEventArgs Client, VoltronPacket Packet)
+        public static async void OnReceivedRSGZWrapperPDU(Client Client, VoltronPacket Packet)
         {
             uint SendingAvatarID = Packet.ReadUInt32();
             Packet.ReadUInt32(); //Unknown.

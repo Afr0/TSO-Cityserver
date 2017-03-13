@@ -10,8 +10,8 @@ namespace TSO_E_Cityserver
     {
         private static SslSocketMonitor m_SSLSocket;
         private static int m_ConnectionIDs = 0;
-        private static ConcurrentDictionary<int, SslSocketEventArgs> m_Sockets = 
-            new ConcurrentDictionary<int, SslSocketEventArgs>();
+        private static ConcurrentDictionary<int, Client> m_Sockets = 
+            new ConcurrentDictionary<int, Client>();
 
         static void Main(string[] args)
         {
@@ -27,9 +27,9 @@ namespace TSO_E_Cityserver
                 Settings["Certificate"].Value = "selfsigned.cer";
 
             if (Settings["AccountDatasource"] == null)
-                Settings.Add("AccountsDatasource", "Accounts.db");
+                Settings.Add("AccountsDatasource", "C:\\Accounts.db");
             else
-                Settings["AccountDatasource"].Value = "Accounts.db";
+                Settings["AccountDatasource"].Value = "C:\\Accounts.db";
 
             Config.Save(ConfigurationSaveMode.Modified);
             ConfigurationManager.RefreshSection(Config.AppSettings.SectionInformation.Name);
@@ -54,6 +54,9 @@ namespace TSO_E_Cityserver
             Console.WriteLine("Success!\n Creating master account...");
             DatabaseFacade.CreateAccount(1, "asdf", "hjkl", "2002", 10, "1337", "0", "0");
 
+            DatabaseFacade.CreateCityserver(1, "Alphaville", 1, "Up", 2, 0, "Afr0", "Welcome!",
+                "This server is hosted by Donald Trump Has Small Hands!");
+
             //Test...
             DatabaseFacade.CreateAvatar(1337, "Donald Trump", "", 5000, 0, 10, 10, "AlphaVille",
                 0x1011, 0x1213, 0x1415, 0x1617, 0x1819, 0x1a1b, 0x1c1d, 0x1e1f, 0x2021, 0x2223, 0x2425,
@@ -68,7 +71,7 @@ namespace TSO_E_Cityserver
             m_SSLSocket.InitializeSocket();
         }
 
-        private static async void M_SSLSocket_Connected(object sender, SslSocketEventArgs e)
+        private static async void M_SSLSocket_Connected(object sender, Client e)
         {
             if (e.IsAuthenticated())
             {
@@ -82,7 +85,7 @@ namespace TSO_E_Cityserver
             }
         }
 
-        private static /*async*/ void M_SSLSocket_ReceivedData(object sender, SslSocketEventArgs e)
+        private static /*async*/ void M_SSLSocket_ReceivedData(object sender, Client e)
         {
             AriesPacket ReceivedPacket;
             VoltronPacket VPacket;

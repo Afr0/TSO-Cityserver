@@ -51,7 +51,7 @@ namespace TSO_E_Cityserver.Database
             {
                 Cmd = new SQLiteCommand(m_DBConnection);
                 Cmd.CommandText = "CREATE TABLE IF NOT EXISTS Accounts (Id int PRIMARY KEY, " +
-                    "Username nvarchar(256), Password nvarchar(256), SessionID nvarchar(256), " + 
+                    "Username nvarchar(256), Password nvarchar(256), AuthTicket int, " + 
                     "PreferedLanguageID int, AvatarID1 int, AvatarID2 int, AvatarID3 int)";
                 Cmd.CommandType = CommandType.Text;
                 Cmd.ExecuteNonQuery(CommandBehavior.Default);
@@ -79,12 +79,30 @@ namespace TSO_E_Cityserver.Database
                     "VisitorBonus bigint, OnlineJobID mediumint)";
                 Cmd.CommandType = CommandType.Text;
                 Cmd.ExecuteNonQuery(CommandBehavior.Default);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Unable to create Avatars table:");
+                Console.WriteLine(e.ToString());
+
+                return false;
+            }
+
+            try
+            {
+                Cmd = new SQLiteCommand(m_DBConnection);
+                Cmd.CommandText = "CREATE TABLE IF NOT EXISTS CityServers (ID int PRIMARY KEY, " +
+                    "Name nvarchar(256), Rank int, " +
+                    "Status nvarchar(256), Map int, OnlineAvatars int, MOTDFrom nvarchar(256), " +
+                    "MOTDSubject nvharchar(256), MOTDMessage nvarchar(256))";
+                Cmd.CommandType = CommandType.Text;
+                Cmd.ExecuteNonQuery(CommandBehavior.Default);
 
                 return true;
             }
             catch (Exception e)
             {
-                Console.WriteLine("Unable to create Avatars table:");
+                Console.WriteLine("Unable to create Cityservers table:");
                 Console.WriteLine(e.ToString());
 
                 return false;
@@ -108,10 +126,23 @@ namespace TSO_E_Cityserver.Database
             SQLiteCommand Cmd = new SQLiteCommand(m_DBConnection);
             //TODO: Only INSERT if it doesn't exist...
             Cmd.CommandText = "INSERT OR REPLACE INTO Accounts ('ID', 'Username', " + 
-                "'Password', 'SessionID', 'PreferedLanguageID', 'AvatarID1', " + 
+                "'Password', 'AuthTicket', 'PreferedLanguageID', 'AvatarID1', " + 
                 "'AvatarID2', 'AvatarID3') VALUES (" + ID + ", '" + Username + "', " +
                 "'" + Password + "', '" + SessionID + "', " + PreferedLanguageID + ", '" + 
                 AvatarID1 + "', " + "'" + AvatarID2 + "', " + "'" + AvatarID3 + "')";
+            Cmd.CommandType = CommandType.Text;
+            Cmd.ExecuteNonQuery();
+        }
+
+        public static void CreateCityserver(int ID, string Name, int Rank, string Status, int Map,
+            int OnlineAvatars, string MOTDFrom, string MOTDSubject, string MOTDMessage)
+        {
+            SQLiteCommand Cmd = new SQLiteCommand(m_DBConnection);
+            //TODO: Only INSERT if it doesn't exist...
+            Cmd.CommandText = "INSERT OR REPLACE INTO CityServers ('ID', 'Name', 'Rank', 'Status', 'Map'," +
+                "'OnlineAvatars', 'MOTDFrom', 'MOTDSubject', 'MOTDMessage') VALUES (" + ID + ", '" + Name + "', " +
+                Rank + ", '" + Status + "', " + Map + ", " + OnlineAvatars + ", '" +
+                MOTDFrom + "', '" + MOTDSubject + "', '" + MOTDMessage + "')";
             Cmd.CommandType = CommandType.Text;
             Cmd.ExecuteNonQuery();
         }
@@ -223,7 +254,7 @@ namespace TSO_E_Cityserver.Database
             {
                 Username = reader["Username"].ToString(),
                 Password = reader["Password"].ToString(),
-                SessionID = reader["SessionID"].ToString(),
+                AuthTicket = (uint)reader["AuthTicket"],
                 PreferedLanguageID = int.Parse(reader["PreferedLanguageID"].ToString()),
                 AvatarID1 = reader["AvatarID1"].ToString(),
                 AvatarID2 = reader["AvatarID2"].ToString(),
