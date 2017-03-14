@@ -54,7 +54,7 @@ namespace TSO_E_Cityserver
             Console.WriteLine("Success!\n Creating master account...");
             DatabaseFacade.CreateAccount(1, "asdf", "hjkl", "2002", 10, "1337", "0", "0");
 
-            DatabaseFacade.CreateCityserver(1, "Alphaville", 1, "Up", 2, 0, "Afr0", "Welcome!",
+            DatabaseFacade.CreateCityserver(1, "Alphaville", 49, 1, "Up", 2, 0, "Afr0", "Welcome!",
                 "This server is hosted by Donald Trump Has Small Hands!");
 
             //Test...

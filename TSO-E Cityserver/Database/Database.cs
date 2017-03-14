@@ -92,7 +92,7 @@ namespace TSO_E_Cityserver.Database
             {
                 Cmd = new SQLiteCommand(m_DBConnection);
                 Cmd.CommandText = "CREATE TABLE IF NOT EXISTS CityServers (ID int PRIMARY KEY, " +
-                    "Name nvarchar(256), Rank int, " +
+                    "Name nvarchar(256), Port int, Rank int, " +
                     "Status nvarchar(256), Map int, OnlineAvatars int, MOTDFrom nvarchar(256), " +
                     "MOTDSubject nvharchar(256), MOTDMessage nvarchar(256))";
                 Cmd.CommandType = CommandType.Text;
@@ -134,14 +134,14 @@ namespace TSO_E_Cityserver.Database
             Cmd.ExecuteNonQuery();
         }
 
-        public static void CreateCityserver(int ID, string Name, int Rank, string Status, int Map,
+        public static void CreateCityserver(int ID, string Name, int Port, int Rank, string Status, int Map,
             int OnlineAvatars, string MOTDFrom, string MOTDSubject, string MOTDMessage)
         {
             SQLiteCommand Cmd = new SQLiteCommand(m_DBConnection);
             //TODO: Only INSERT if it doesn't exist...
-            Cmd.CommandText = "INSERT OR REPLACE INTO CityServers ('ID', 'Name', 'Rank', 'Status', 'Map'," +
+            Cmd.CommandText = "INSERT OR REPLACE INTO CityServers ('ID', 'Name', 'Port', 'Rank', 'Status', 'Map'," +
                 "'OnlineAvatars', 'MOTDFrom', 'MOTDSubject', 'MOTDMessage') VALUES (" + ID + ", '" + Name + "', " +
-                Rank + ", '" + Status + "', " + Map + ", " + OnlineAvatars + ", '" +
+                Port + ", " + Rank + ", '" + Status + "', " + Map + ", " + OnlineAvatars + ", '" +
                 MOTDFrom + "', '" + MOTDSubject + "', '" + MOTDMessage + "')";
             Cmd.CommandType = CommandType.Text;
             Cmd.ExecuteNonQuery();
