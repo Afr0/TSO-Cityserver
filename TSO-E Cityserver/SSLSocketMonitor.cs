@@ -210,30 +210,48 @@ namespace TSO_E_Cityserver
         private void ProcessVoltronPackets(Client Client, byte[] PacketBuf)
         {
             VoltronHeader Header = ReadVoltronHeader(PacketBuf, 12);
-            //bool ReadAriesHeader = true;
 
             MemoryStream AriesStream = new MemoryStream(PacketBuf);
             EndianBinaryReader Reader = new EndianBinaryReader(new BigEndianBitConverter(), AriesStream);
             int Remaining = (int)AriesStream.Length - 12;
 
-            Reader.ReadBytes(12); //Aries header.
-
+            byte[] AriesHeader = Reader.ReadBytes(12); //Aries header.
 
             while (Header.PacketSize < Remaining)
             {
-                VoltronPacket Packet = new VoltronPacket(Reader.ReadBytes((int)Header.PacketSize), false);
+                byte[] VoltronBody = Reader.ReadBytes((int)Header.PacketSize);
+                VoltronPacket Packet = new VoltronPacket(ReconstructVoltronPacket(AriesHeader,
+                    VoltronBody), true);
 
                 lock (Client.ReceivedPackets)
                     Client.ReceivedPackets.Enqueue(Packet);
 
                 Remaining -= (int)Header.PacketSize;
 
-                if(Header.PacketSize < Remaining)
+                if (Header.PacketSize < Remaining)
                     Header = ReadVoltronHeader(AriesStream.ToArray(), (int)(AriesStream.Position));
             }
 
             Reader.Close();
-            ReceivedData.InvokeSafely(this, Client);
+            ReceivedData?.Invoke(this, Client);
+        }
+
+        /// <summary>
+        /// Reconstructs a (full) Voltron packet in memory.
+        /// </summary>
+        /// <param name="AriesHeader">The header of an aries packet.</param>
+        /// <param name="VoltronPacket">The body (and header) of a Voltron packet.</param>
+        /// <returns>A Voltron packet with its corresponding Aries header.</returns>
+        private byte[] ReconstructVoltronPacket(byte[] AriesHeader, byte[] VoltronPacket)
+        {
+            MemoryStream OutputStream = new MemoryStream();
+            BinaryWriter Writer = new BinaryWriter(OutputStream);
+
+            Writer.Write(AriesHeader);
+            Writer.Write(VoltronPacket);
+            Writer.Flush();
+
+            return OutputStream.ToArray();
         }
 
         private AriesHeader ReadAriesHeader(byte[] Buffer)
