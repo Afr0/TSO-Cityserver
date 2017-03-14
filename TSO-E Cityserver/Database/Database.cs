@@ -50,7 +50,7 @@ namespace TSO_E_Cityserver.Database
             try
             {
                 Cmd = new SQLiteCommand(m_DBConnection);
-                Cmd.CommandText = "CREATE TABLE IF NOT EXISTS Accounts (Id int PRIMARY KEY, " +
+                Cmd.CommandText = "CREATE TABLE IF NOT EXISTS Accounts (ID int PRIMARY KEY, " +
                     "Username nvarchar(256), Password nvarchar(256), AuthTicket int, " + 
                     "PreferedLanguageID int, AvatarID1 int, AvatarID2 int, AvatarID3 int)";
                 Cmd.CommandType = CommandType.Text;
