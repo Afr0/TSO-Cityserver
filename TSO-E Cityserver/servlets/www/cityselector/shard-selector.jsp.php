@@ -1,4 +1,4 @@
-<?php 
+﻿<?php 
 #This ShardSelectorServlet is for TSO Pre-Alpha.
 
 /*echo '<?xml version="1.0" encoding="UTF-8" ?>
@@ -30,7 +30,7 @@ if(empty($_GET['avatarId']) || !isset($_GET['avatarId'])) #No AvatarID means pla
 
 	while($row = $STH->fetch()) #Make sure that the ID doesn't already exist.
 	{
-		$UUID = genRandomNumber(15, false); #Generate an AvatarID
+		$UUID = mt_rand(0, 0x7fffffff); #Generate an AvatarID
 		$STH = $DBHandle->query('SELECT ID FROM Avatars where ID =' . $UUID);
 	}
 

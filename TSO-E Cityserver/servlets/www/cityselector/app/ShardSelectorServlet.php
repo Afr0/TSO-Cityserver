@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /*This ShardSelectorServlet is for TSO New and Improved (NAI)*/ 
 /*echo '<?xml version="1.0" encoding="UTF-8" ?>
 <Shard-Selection>
@@ -32,7 +32,7 @@ if(empty($_GET['avatarId']) || !isset($_GET['avatarId'])) #No AvatarID means pla
 
 	while($row = $STH->fetch()) #Make sure that the ID doesn't already exist.
 	{
-		$UUID = genRandomNumber(15, false); #Generate an AvatarID
+		$UUID = mt_rand(0, 0x7fffffff); #Generate an AvatarID
 		$STH = $DBHandle->query('SELECT ID FROM Avatars where ID =' . $UUID);
 	}
 
@@ -53,32 +53,32 @@ if(empty($_GET['avatarId']) || !isset($_GET['avatarId'])) #No AvatarID means pla
 	$Authorized = false;
 
 	if($AvatarID1 == 0 || $AvatarID2 == 0 || $AvatarID3 == 0)
-        {
+    {
 		$Authorized = true;
-        }
+    }
 	
 	if($Authorized == true)
 	{
-            $STH = $DBHandle->query('SELECT * FROM CityServers');
+        $STH = $DBHandle->query('SELECT * FROM CityServers');
 
-            while($row = $STH->fetch()) 
+        while($row = $STH->fetch()) 
+        {
+            if(strtoupper($row['Name']) == strtoupper($_GET['shardName']))
             {
-                if(strtoupper($row['Name']) == strtoupper($_GET['shardName']))
-                {
-                	echo '<?xml version="1.0" encoding="UTF-8" ?>';
-                    	echo("\n");
-                   	echo("<Shard-Selection>\n");
-                    	echo("  <Connection-Address>localhost:" . $row['Port'] . "</Connection-Address>\n");
-                    	echo("  <Authorization-Ticket>" . $_COOKIE['TSOSession'] . "</Authorization-Ticket>\n");
-                    	echo("  <PlayerID>" . $PlayerID . "</PlayerID>\n");
-                    	#Not sure what this means...
-                    	echo("  <ConnectionID>" . 20301 . "</ConnectionID>\n");
-                    	#TODO: Output 1 for CSR
-                    	echo("  <EntitlementLevel>" . 3 . "</EntitlementLevel>\n");
-                    	echo("  <AvatarID>" . $UUID . "</AvatarID>\n");
-                	echo("</Shard-Selection>");		
-                }
+                echo '<?xml version="1.0" encoding="UTF-8" ?>';
+                echo("\n");
+                echo("<Shard-Selection>\n");
+                    echo("  <Connection-Address>localhost:" . $row['Port'] . "</Connection-Address>\n");
+                    echo("  <Authorization-Ticket>" . $_COOKIE['TSOSession'] . "</Authorization-Ticket>\n");
+                    echo("  <PlayerID>" . $PlayerID . "</PlayerID>\n");
+                    #Not sure what this means...
+                    echo("  <ConnectionID>" . 20301 . "</ConnectionID>\n");
+                    #TODO: Output 1 for CSR
+                    echo("  <EntitlementLevel>" . 3 . "</EntitlementLevel>\n");
+                    echo("  <AvatarID>" . $UUID . "</AvatarID>\n");
+                echo("</Shard-Selection>");		
             }
+        }
 	}
 	else
 	{
@@ -91,29 +91,29 @@ if(empty($_GET['avatarId']) || !isset($_GET['avatarId'])) #No AvatarID means pla
 		echo("</Error-Message>");
 	}
         
-        $Authorized = false;
+    $Authorized = false;
 
 	#TODO: Figure out if it's AvatarID1, 2 or 3
 	if($AvatarID1 == 0)
 	{
-            $STH = $DBHandle->prepare('UPDATE Accounts SET AvatarID1= :AvatarID WHERE AuthTicket= "' . $_COOKIE['TSOSession'] . '"');
-            $Authorized = true;
+        $STH = $DBHandle->prepare('UPDATE Accounts SET AvatarID1= :AvatarID WHERE AuthTicket= "' . $_COOKIE['TSOSession'] . '"');
+        $Authorized = true;
 	}
 	else if($AvatarID2 == 0)
 	{
-            if($Authorized == false)
-            {
-		$STH = $DBHandle->prepare('UPDATE Accounts SET AvatarID2= :AvatarID WHERE AuthTicket= "' . $_COOKIE['TSOSession'] . '"');
-		$Authorized = true;
-            }
+        if($Authorized == false)
+        {
+		    $STH = $DBHandle->prepare('UPDATE Accounts SET AvatarID2= :AvatarID WHERE AuthTicket= "' . $_COOKIE['TSOSession'] . '"');
+		    $Authorized = true;
+        }
 	}
 	else if($AvatarID3 == 0)
 	{
-            if($Authorized == false)
-            {
-		$STH = $DBHandle->prepare('UPDATE Accounts SET AvatarID3= :AvatarID WHERE AuthTicket= "' . $_COOKIE['TSOSession'] . '"');
-		$Authorized = true;
-            }
+        if($Authorized == false)
+        {
+		    $STH = $DBHandle->prepare('UPDATE Accounts SET AvatarID3= :AvatarID WHERE AuthTicket= "' . $_COOKIE['TSOSession'] . '"');
+		    $Authorized = true;
+        }
 	}
 	
 	If($Authorized == true)
@@ -141,22 +141,22 @@ else	#Client provided an AvatarID, so no new character is going to be created.
 
 	$STH = $DBHandle->query('SELECT * FROM CityServers');
 
-        while($row = $STH->fetch()) 
+    while($row = $STH->fetch()) 
+    {
+        if($row['Name'] == $_GET['shardName'])
         {
-        	if($row['Name'] == $_GET['shardName'])
-                {
-                	echo '<?xml version="1.0" encoding="UTF-8" ?>';
-                    	echo("\n");
-                    	echo("<Shard-Selection>\n");
-                    	echo("<Connection-Address>localhost:" . $row['Port'] . "</Connection-Address>\n");
-                    	echo("<Authorization-Ticket>" . $_COOKIE['TSOSession'] . "</Authorization-Ticket>\n");
-                    	echo("<PlayerID>" . $PlayerID . "</PlayerID>\n");
-                    	#Not sure what this means...
-                    	echo("<ConnectionID>" . 1 . "</ConnectionID>\n");
-                    	#TODO: Output 1 for CSR
-                    	echo("<EntitlementLevel>" . 0 . "</EntitlementLevel>\n");
-                    	echo("<AvatarID>" . $_GET['avatarId'] . "</AvatarID>\n");
-                	echo("</Shard-Selection>");
-        	}
+            echo '<?xml version="1.0" encoding="UTF-8" ?>';
+                echo("\n");
+                echo("<Shard-Selection>\n");
+                echo("<Connection-Address>localhost:" . $row['Port'] . "</Connection-Address>\n");
+                echo("<Authorization-Ticket>" . $_COOKIE['TSOSession'] . "</Authorization-Ticket>\n");
+                echo("<PlayerID>" . $PlayerID . "</PlayerID>\n");
+                #Not sure what this means...
+                echo("<ConnectionID>" . 1 . "</ConnectionID>\n");
+                #TODO: Output 1 for CSR
+                echo("<EntitlementLevel>" . 0 . "</EntitlementLevel>\n");
+                echo("<AvatarID>" . $_GET['avatarId'] . "</AvatarID>\n");
+            echo("</Shard-Selection>");
+        }
 	}
 }?>
