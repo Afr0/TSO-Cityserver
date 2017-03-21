@@ -19,6 +19,8 @@ namespace TSO_E_Cityserver.Refpack
                 m_Reader = new EndianBinaryReader(new LittleEndianBitConverter(), Strm);
             else
                 m_Reader = new EndianBinaryReader(new BigEndianBitConverter(), Strm);
+
+            m_Reader.BaseStream.Position = 0; //Just to make sure.
         }
 
         /// <summary>
@@ -26,23 +28,36 @@ namespace TSO_E_Cityserver.Refpack
         /// </summary>
         public Stream Decompress()
         {
-            byte BodyType = ReadByte();
-            uint DecompressedSize = ReadUInt32();
-
-            if (BodyType == 0)
-                return new MemoryStream(ReadBytes((int)DecompressedSize));
-            else
+            try
             {
-                uint CompressedSize = ReadUInt32();
-                //This is *always* in little endian, regardless of the rest
-                //of the stream, probably to avoid switching, because its
-                //value is the same as the above field.
-                uint StreamSize = ReadUInt32();
+                byte BodyType = ReadByte();
+                uint DecompressedSize = ReadUInt32();
 
-                Decompresser Dec = new Decompresser();
-                byte[] DecompressedData = Dec.Decompress(ReadBytes((int)CompressedSize));
+                if (BodyType == 0)
+                    return new MemoryStream(ReadBytes((int)DecompressedSize));
+                else
+                {
+                    uint CompressedSize = ReadUInt32();
+                    //This is *always* in little endian, regardless of the rest
+                    //of the stream, probably to avoid switching, because its
+                    //value is the same as the above field.
+                    uint StreamSize = ReadUInt32();
 
-                return new MemoryStream(DecompressedData);
+                    //This is the RefPak header. For some reason, reading it inside the Decompresser
+                    //causes the Decompresser to crash. So read it here instead.
+                    ReadBytes(5);
+
+                    Decompresser Dec = new Decompresser();
+                    Dec.DecompressedSize = DecompressedSize;
+                    //CompressedSize includes the size of itself (4 bytes) and the RefPak header (5 bytes).
+                    byte[] DecompressedData = Dec.Decompress(ReadBytes((int)CompressedSize - 9));
+
+                    return new MemoryStream(DecompressedData);
+                }
+            }
+            catch(Exception E)
+            {
+                throw new Exception(E.ToString());
             }
         }
 

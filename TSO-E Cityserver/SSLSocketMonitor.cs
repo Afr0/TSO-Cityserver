@@ -72,7 +72,7 @@ namespace TSO_E_Cityserver
                 if (e.InnerException != null)
                     Console.WriteLine(e.InnerException);
 
-                Disconnected.InvokeSafely(this, resultWrapper);
+                Disconnected?.Invoke(this, resultWrapper);
                 resultWrapper.CloseAndDisposeSslStream();
             }
         }
@@ -96,7 +96,7 @@ namespace TSO_E_Cityserver
 
                 if (resultWrapper.IsAuthenticated())
                 {
-                    Connected.InvokeSafely(this, resultWrapper);
+                    Connected?.Invoke(this, resultWrapper);
                     if (resultWrapper.CanRead())
                     {
                         //resultWrapper.CreateBuffer(5);
@@ -106,14 +106,14 @@ namespace TSO_E_Cityserver
                 }
                 else
                 {
-                    Disconnected.InvokeSafely(this, resultWrapper);
+                    Disconnected?.Invoke(this, resultWrapper);
                     resultWrapper.CloseAndDisposeSslStream();
                 }
             }
             catch (Exception e)
             {
                 Console.WriteLine(e);
-                Disconnected.InvokeSafely(this, resultWrapper);
+                Disconnected?.Invoke(this, resultWrapper);
                 resultWrapper.CloseAndDisposeSslStream();
             }
         }
@@ -149,7 +149,7 @@ namespace TSO_E_Cityserver
             catch (Exception e)
             {
                 Console.WriteLine(e);
-                Disconnected.InvokeSafely(this, resultWrapper);
+                Disconnected?.Invoke(this, resultWrapper);
                 resultWrapper.CloseAndDisposeSslStream();
             }
         }
@@ -166,7 +166,7 @@ namespace TSO_E_Cityserver
                     lock (Client.ReceivedPackets)
                         Client.ReceivedPackets.Enqueue(new AriesPacket(PacketBuf, true));
 
-                    ReceivedData.InvokeSafely(this, Client);
+                    ReceivedData?.Invoke(this, Client);
 
                     m_CurrentlyReceived -= (int)PacketSize;
                 }
@@ -181,7 +181,7 @@ namespace TSO_E_Cityserver
                         lock (Client.ReceivedPackets)
                             Client.ReceivedPackets.Enqueue(new VoltronPacket(PacketBuf, true));
 
-                        ReceivedData.InvokeSafely(this, Client);
+                        ReceivedData?.Invoke(this, Client);
                     }
 
                     m_CurrentlyReceived -= (int)PacketSize;
@@ -220,7 +220,7 @@ namespace TSO_E_Cityserver
             while (Header.PacketSize < Remaining)
             {
                 byte[] VoltronBody = Reader.ReadBytes((int)Header.PacketSize);
-                VoltronPacket Packet = new VoltronPacket(ReconstructVoltronPacket(AriesHeader,
+                VoltronPacket Packet = new VoltronPacket(ReconstructVoltronPacket(AriesHeader, 
                     VoltronBody), true);
 
                 lock (Client.ReceivedPackets)
@@ -228,7 +228,7 @@ namespace TSO_E_Cityserver
 
                 Remaining -= (int)Header.PacketSize;
 
-                if (Header.PacketSize < Remaining)
+                if(Header.PacketSize < Remaining)
                     Header = ReadVoltronHeader(AriesStream.ToArray(), (int)(AriesStream.Position));
             }
 

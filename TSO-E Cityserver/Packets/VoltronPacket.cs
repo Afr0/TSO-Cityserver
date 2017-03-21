@@ -1,8 +1,11 @@
-﻿using System.Text;
+﻿using System;
+using System.Text;
 using System.IO;
 using MiscUtil.IO;
 using MiscUtil.Conversion;
 using TSO_E_Cityserver.Refpack;
+using TSO_E_Cityserver.Packets.MessageClasses;
+using TSO_E_Cityserver.Packets.Constants;
 
 namespace TSO_E_Cityserver.Packets
 {
@@ -43,27 +46,55 @@ namespace TSO_E_Cityserver.Packets
         /// </summary>
         public Stream Decompress()
         {
-            byte BodyType = ReadByte();
-            uint DecompressedSize = ReadUInt32();
-
-            if (BodyType == 0)
-                return new MemoryStream(ReadBytes((int)DecompressedSize));
-            else
+            try
             {
-                uint CompressedSize = ReadUInt32();
-                //This is *always* in little endian, regardless of the rest
-                //of the stream, probably to avoid switching, because its
-                //value is the same as the above field.
-                SwitchEndianNess(new LittleEndianBitConverter());
-                uint StreamSize = ReadUInt32();
+                byte BodyType = ReadByte();
+                uint DecompressedSize = ReadUInt32();
 
-                Decompresser Dec = new Decompresser();
-                byte[] DecompressedData = Dec.Decompress(ReadBytes((int)CompressedSize));
+                if (BodyType == 0)
+                    return new MemoryStream(ReadBytes((int)DecompressedSize));
+                else
+                {
+                    uint CompressedSize = ReadUInt32();
+                    //This is *always* in little endian, regardless of the rest
+                    //of the stream, probably to avoid switching, because its
+                    //value is the same as the above field.
+                    SwitchEndianNess(new LittleEndianBitConverter());
+                    uint StreamSize = ReadUInt32();
 
-                SwitchEndianNess(new BigEndianBitConverter());
+                    //For some reason, reading the RefPak header inside the decompresser causes it to crash.
+                    //So read it here instead.
+                    ReadBytes(5);
 
-                return new MemoryStream(DecompressedData);
+                    Decompresser Dec = new Decompresser();
+                    Dec.DecompressedSize = DecompressedSize;
+                    //CompressedSize includes the size of itself (4 bytes) and the RefPak header (5 bytes).
+                    byte[] DecompressedData = Dec.Decompress(ReadBytes((int)CompressedSize - 9));
+
+                    SwitchEndianNess(new BigEndianBitConverter());
+
+                    return new MemoryStream(DecompressedData);
+                }
             }
+            catch (Exception E)
+            {
+                throw new Exception(E.ToString());
+            }
+        }
+
+        /// <summary>
+        /// Reads and returns a cTSONetMessageStandard header.
+        /// </summary>
+        /// <returns>A cTSONetMessageStandard instance.</returns>
+        public cTSONetMessageStandard ReadcTSONetMessageStandard()
+        {
+            cTSONetMessageStandard NetMessageStandard = new cTSONetMessageStandard();
+            NetMessageStandard.TransactionID1 = ReadInt16();
+            NetMessageStandard.TransactionID2 = ReadInt16();
+            NetMessageStandard.SendingAvatarID = ReadUInt32();
+            NetMessageStandard.Flags = ReadByte();
+            NetMessageStandard.MessageID = (cTSONetMessageStandardMsgIDs)ReadUInt32();
+            return NetMessageStandard;
         }
 
         private void SwitchEndianNess(EndianBitConverter Endianness)

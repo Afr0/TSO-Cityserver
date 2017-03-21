@@ -21,17 +21,18 @@ namespace TSO_E_Cityserver.Database
         public short[] Globals;
         public RelationshipMatrix RelMatrix = new RelationshipMatrix();
 
-        public cTSONeighbor(Stream DecompressedStream)
+        public cTSONeighbor(Stream DecompressedStream, bool IsAvatarCreationRequest)
         {
             BinaryReader Reader = new BinaryReader(DecompressedStream);
 
-            AvatarID = Reader.ReadUInt32();
+            if(!IsAvatarCreationRequest)
+                AvatarID = Reader.ReadUInt32();
 
             uint UnknownCount1 = Reader.ReadUInt32();
 
             for(uint i = 0; i < UnknownCount1; i++)
             {
-                Reader.ReadUInt32(); //AvatarID
+                AvatarID = Reader.ReadUInt32(); //AvatarID
                 Reader.ReadUInt32(); //Unknown
 
                 short GlobalsCount = Reader.ReadInt16();

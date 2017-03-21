@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿
 
-namespace TSO_E_Cityserver.Packets.MessageClasses
+namespace TSO_E_Cityserver.Packets.Constants
 {
     public enum MessageClsIDs : uint
     {

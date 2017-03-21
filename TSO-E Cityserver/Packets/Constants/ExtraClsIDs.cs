@@ -69,7 +69,7 @@ namespace TSO_E_Cityserver.Packets.Constants
 
         GetGenericFlash =            0x9FE8B670,
         GetAvatarIDByName =          0xA95BB3D7,
-        TransmitCreateAvatarNotificationPDU = 0x3EA44787
+        TSOAvatarCreationRequest = 0x3EA44787
     }
 
     /// <summary>

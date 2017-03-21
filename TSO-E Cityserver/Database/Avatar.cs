@@ -15,6 +15,7 @@ namespace TSO_E_Cityserver.Database
         public int Popularity;
         public int PopularityDelta;
         public string ShardName;
+        public uint PropertyID;
 
         //No idea what these are or how they work, so let's just hardcode them.
         public short SkillLockMechanical = 0x1011;
@@ -37,5 +38,7 @@ namespace TSO_E_Cityserver.Database
         public ushort IsGhost = 0;
         public uint SimBonus, PropertyBonus, VisitorBonus;
         public ushort OnlineJobID;
+
+        public byte[] cTSONeighborBlob;
     }
 }

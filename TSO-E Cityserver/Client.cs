@@ -13,14 +13,13 @@ using TSO_E_Cityserver.Packets;
 namespace TSO_E_Cityserver
 {
     /// <summary>
-    /// Holds arguments passed as part of an SslSocketEvent.
-    /// From: http://codereview.stackexchange.com/questions/15550/asynchronous-sslstream
+    /// A client connected to this server communicating via the Voltron protocol.
     /// </summary>
-    public class Client : EventArgs
+    public class Client
     {
         private static Configuration Config = 
             ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
-        private static readonly X509Certificate Certificate = 
+        private static readonly X509Certificate Certificate =
             X509Certificate.CreateFromCertFile(Config.AppSettings.Settings["Certificate"].Value);
 
         private SslStream m_sslStream;
@@ -32,26 +31,15 @@ namespace TSO_E_Cityserver
         public Account PlayerAccount;
 
         /// <summary>
-        /// Begins sending data through this SSLSocketEventArgs' SslStream instance.
+        /// Client just created a new avatar and is transfering to the neighborhood screen.
         /// </summary>
-        /// <param name="Buffer">The buffer holding the data to send.</param>
-        /// <param name="PacketName">Name of the packet being sent, for logging purposes.</param>
-        public async Task SendData(byte[] Buffer)
-        {
-            await m_sslStream.WriteAsync(Buffer, 0, Buffer.Length);
-            await m_sslStream.FlushAsync();
-        }
+        public bool HasCreatedNewAvatar = false;
 
-        public byte[] StringPacketsTogether(VoltronPacket[] Packets)
-        {
-            MemoryStream MemStream = new MemoryStream();
-            BinaryWriter Writer = new BinaryWriter(MemStream);
-
-            foreach (VoltronPacket Pack in Packets)
-                Writer.Write(Pack.ToArray());
-
-            return MemStream.ToArray();
-        }
+        public uint TemporaryAvatarID = 0;
+        //ID received after client created an avatar.
+        public uint NewAvatarID = 0;
+        //Newly created avatar (in CAS).
+        public Avatar NewAvatar;
 
         public void ReplaceSslStream(IAsyncResult result, Socket socket)
         {
@@ -113,6 +101,33 @@ namespace TSO_E_Cityserver
         public bool CanRead()
         {
             return m_sslStream.CanRead;
+        }
+
+        /// <summary>
+        /// Begins sending data through this SSLSocketEventArgs' SslStream instance.
+        /// </summary>
+        /// <param name="Buffer">The buffer holding the data to send.</param>
+        /// <param name="PacketName">Name of the packet being sent, for logging purposes.</param>
+        public async Task SendData(byte[] Buffer)
+        {
+            await m_sslStream.WriteAsync(Buffer, 0, Buffer.Length);
+            await m_sslStream.FlushAsync();
+        }
+
+        /// <summary>
+        /// Strings several packets together.
+        /// </summary>
+        /// <param name="Packets">An array of Voltron packets to string together.</param>
+        /// <returns>A byte array consisting of the packets string together.</returns>
+        public byte[] StringPacketsTogether(VoltronPacket[] Packets)
+        {
+            MemoryStream MemStream = new MemoryStream();
+            BinaryWriter Writer = new BinaryWriter(MemStream);
+
+            foreach (VoltronPacket Pack in Packets)
+                Writer.Write(Pack.ToArray());
+
+            return MemStream.ToArray();
         }
     }
 }

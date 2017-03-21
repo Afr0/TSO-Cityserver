@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Reflection;
 using System.Collections.Generic;
+using System.IO;
 using TSO_E_Cityserver.Database;
-using TSO_E_Cityserver.Packets.MessageClasses;
 using TSO_E_Cityserver.Packets.Constants;
+using TSO_E_Cityserver.Packets.MessageClasses;
 using TSO_E_Cityserver.Refpack;
 using log4net;
 
@@ -24,7 +25,7 @@ namespace TSO_E_Cityserver.Packets
             Packet.ReadByte(); //Unknown.
             string ServiceIdent = Packet.ReadNullString(3);
             Packet.ReadUInt16(); //Unknown.
-            uint AuthTicket = uint.Parse(Packet.ReadNullString((int)Packet.PacketSize - 331));
+            string SessionID = Packet.ReadNullString((int)(Packet.PacketSize - 331));
             Packet.ReadBytes(7); //Reserved.
 
             Console.WriteLine("AvatarID: " + "'" + AvatarID + "'");
@@ -32,7 +33,7 @@ namespace TSO_E_Cityserver.Packets
             Console.WriteLine("Email: " + "'" + Email + "'");
             Console.WriteLine("Authserv: " + "'" + Authserv + "'");
             Console.WriteLine("ServiceIdent: " + "'" + ServiceIdent + "'");
-            Console.WriteLine("AuthTicket: " + "'" + AuthTicket + "'");
+            Console.WriteLine("SessionID: " + "'" + SessionID + "'");
 
             bool SessionIDAcknowledged = false;
             Account PlayerAccount = new Account();
@@ -40,8 +41,7 @@ namespace TSO_E_Cityserver.Packets
             IEnumerable<Account> Accs = await DatabaseFacade.GetAccountsAsync();
             foreach(Account Acc in Accs)
             {
-                //if (string.Equals(Acc.AuthTicket, AuthTicket, StringComparison.CurrentCultureIgnoreCase))
-                if(Acc.AuthTicket == AuthTicket)
+                if (string.Equals(Acc.SessionID, SessionID, StringComparison.CurrentCultureIgnoreCase))
                 {
                     SessionIDAcknowledged = true;
                     PlayerAccount = Acc;
@@ -52,12 +52,17 @@ namespace TSO_E_Cityserver.Packets
 
             Client.PlayerAccount = PlayerAccount;
 
+            if (Client.TemporaryAvatarID != 0)
+            {
+                DatabaseFacade.UpdateAvatarID(Client.TemporaryAvatarID, uint.Parse(AvatarID));
+                Client.NewAvatarID = uint.Parse(AvatarID);
+            }
+
             if (SessionIDAcknowledged)
             {
                 await Client.SendData(
                     Client.StringPacketsTogether(new VoltronPacket[] { new HostOnlinePDU(),
-                        new UpdatePlayerPDU(AvatarID, PlayerAccount) } ));
-                //await Client.SendData(new HostOnlinePDU().ToArray());
+                    new UpdatePlayerPDU(AvatarID, PlayerAccount) }));
 
                 m_Logger.Info("Sent HostOnlinePDU: " + new HostOnlinePDU().ToHexString());
                 m_Logger.Info("Sent UpdatePlayerPDU: " + new UpdatePlayerPDU(AvatarID, PlayerAccount).ToHexString());
@@ -90,7 +95,7 @@ namespace TSO_E_Cityserver.Packets
             Console.WriteLine("Client's art version: " + Client.VersionInfo.m_artVersion);
         }
 
-        public static void OnReceivedDBServiceWrapperPDU(Client Client, VoltronPacket Packet)
+        public static async void OnReceivedDBServiceWrapperPDU(Client Client, VoltronPacket Packet)
         {
             uint SendingAvatarID = Packet.ReadUInt32();
             uint StringID = Packet.ReadUInt32();
@@ -102,54 +107,50 @@ namespace TSO_E_Cityserver.Packets
             {
                 case MessageClsIDs.cTSONetMessageStandard:
                     Console.WriteLine("Received a cTSONetMessageStandard!");
-                    cTSONetMessageStandard NetMessageStandard = new cTSONetMessageStandard();
-                    NetMessageStandard.TransactionID1 = Packet.ReadInt16();
-                    NetMessageStandard.TransactionID2 = Packet.ReadInt16();
-                    NetMessageStandard.SendingAvatarID = Packet.ReadUInt32();
-                    NetMessageStandard.Flags = Packet.ReadByte();
-                    NetMessageStandard.MessageID = (cTSONetMessageStandardMsgIDs)Packet.ReadUInt32();
+                    cTSONetMessageStandard NetMessageStandard = Packet.ReadcTSONetMessageStandard();
 
-                    if ((NetMessageStandard.Flags & (1 << 1)) != 0)
-                        NetMessageStandard.Data1 = Packet.ReadUInt32();
-                    if ((NetMessageStandard.Flags & (1 << 2)) != 0)
-                        NetMessageStandard.Data2 = Packet.ReadUInt32();
-                    if ((NetMessageStandard.Flags & (1 << 3)) != 0)
-                        NetMessageStandard.Data3 = Packet.ReadUInt32();
-                    if ((NetMessageStandard.Flags & (1 << 5)) != 0)
+                    switch(NetMessageStandard.MessageID)
                     {
-                        NetMessageStandard.ExtraClsID = (ExtraClsRequestIDs)Packet.ReadUInt32();
-                        
-                        switch(NetMessageStandard.ExtraClsID)
-                        {
-                            case ExtraClsRequestIDs.UpdatePreferedLanguageByID:
-                                uint AvatarID = Packet.ReadUInt32();
-                                LanguageCodes LCode = (LanguageCodes)Packet.ReadUInt32();
-                                Packet.ReadUInt32(); //Unknown.
-                                Packet.ReadBytes(32); //Reserved.
-                                Packet.ReadUInt32(); //Unknown.
-                                break;
-                            case ExtraClsRequestIDs.GetGenericFlash:
-                                break;
-                            case ExtraClsRequestIDs.Search:
-                                break;
-                            case ExtraClsRequestIDs.SearchExactMatch:
-                                break;
-                        }
+                        case cTSONetMessageStandardMsgIDs.kTopicUpdateSubscriptionRequest:
+                            Console.WriteLine("Received a topic subscription request!");
+                            uint TopicID = Packet.ReadUInt32();
+
+                            IEnumerable<Avatar> Avatars = await DatabaseFacade.GetAvatarAsync(SendingAvatarID);
+                            string Name = "", Description = "";
+
+                            foreach (Avatar A in Avatars)
+                            {
+                                if (A.AvatarID == SendingAvatarID)
+                                {
+                                    Name = A.Name;
+                                    Description = A.Description;
+                                }
+                            }
+
+                            if (!Avatars.GetEnumerator().MoveNext())
+                            {
+                                Name = Client.NewAvatar.Name;
+                                Description = Client.NewAvatar.Description;
+                            }
+
+                            switch (TopicID)
+                            {
+                                case 0xA46E47DC: //My avatar request
+                                    await Client.SendData(new MyAvatarResponse(Name, Description).ToArray());
+                                    break;
+                                case 0x486B3F7E: //Property page request
+                                    break;
+                                case 0xD042E9D6: //Sim page request
+                                    break;
+                                case 0xE4E9B25D: //Current city request
+                                    break;
+                                
+                            }
+                            break;
+                        case cTSONetMessageStandardMsgIDs.kTopicUnsubscribeRequest:
+                            Console.WriteLine("Received a topic unsubscription request!");
+                            break;
                     }
-                    if ((NetMessageStandard.Flags & (1 << 6)) != 0)
-                        NetMessageStandard.Unknown = Packet.ReadString();
-
-                    break;
-                case MessageClsIDs.cTSONetMessageStream:
-                    Console.WriteLine("Received a cTSONetMessageStream!");
-                    cTSONetMessageStream NetMessageStream = new cTSONetMessageStream();
-                    NetMessageStream.Unknown1 = Packet.ReadUInt32();
-                    NetMessageStream.Unknown2 = Packet.ReadUInt32();
-                    NetMessageStream.Unknown3 = Packet.ReadUInt32();
-                    NetMessageStream.Unknown4 = Packet.ReadUInt32();
-                    NetMessageStream.CompressedData = Packet.ReadBytes((int)(Packet.StreamLength() - 16));
-
-                    //TODO: Decompress data...
 
                     break;
             }
@@ -171,12 +172,7 @@ namespace TSO_E_Cityserver.Packets
             {
                 case MessageClsIDs.cTSONetMessageStandard:
                     Console.WriteLine("Received a cTSONetMessageStandard!");
-                    cTSONetMessageStandard NetMessageStandard = new cTSONetMessageStandard();
-                    NetMessageStandard.TransactionID1 = Packet.ReadInt16();
-                    NetMessageStandard.TransactionID2 = Packet.ReadInt16();
-                    NetMessageStandard.SendingAvatarID = Packet.ReadUInt32();
-                    NetMessageStandard.Flags = Packet.ReadByte();
-                    NetMessageStandard.MessageID = (cTSONetMessageStandardMsgIDs)Packet.ReadUInt32();
+                    cTSONetMessageStandard NetMessageStandard = Packet.ReadcTSONetMessageStandard();
 
                     if ((NetMessageStandard.Flags & (1 << 1)) != 0)
                         NetMessageStandard.Data1 = Packet.ReadUInt32();
@@ -184,6 +180,8 @@ namespace TSO_E_Cityserver.Packets
                         NetMessageStandard.Data2 = Packet.ReadUInt32();
                     if ((NetMessageStandard.Flags & (1 << 3)) != 0)
                         NetMessageStandard.Data3 = Packet.ReadUInt32();
+                    if ((NetMessageStandard.Flags & (1 << 4)) != 0)
+                        NetMessageStandard.Data4 = Packet.ReadUInt32();
                     if ((NetMessageStandard.Flags & (1 << 5)) != 0)
                     {
                         NetMessageStandard.ExtraClsID = (ExtraClsRequestIDs)Packet.ReadUInt32();
@@ -250,6 +248,8 @@ namespace TSO_E_Cityserver.Packets
                                 Packet.ReadUInt32(); //Unknown.
 
                                 IEnumerable<Avatar> Avatars = await DatabaseFacade.GetAvatarAsync(AvatarID);
+                                bool SentLoadAvatarByIDResponse = false;
+
                                 foreach (Avatar Av in Avatars)
                                 {
                                     if (Av.AvatarID == AvatarID)
@@ -259,9 +259,22 @@ namespace TSO_E_Cityserver.Packets
                                             m_isAlertable, NetMessageStandard.TransactionID1, Av);
                                         await Client.SendData(Response.ToArray());
 
+                                        SentLoadAvatarByIDResponse = true;
                                         m_Logger.Info("Sent LoadAvatarByIDResponsePDU: " +
                                             Response.ToHexString());
                                     }
+                                }
+
+                                if(!SentLoadAvatarByIDResponse)
+                                {
+                                    LoadAvatarByIDPDUResponse Response =
+                                        new LoadAvatarByIDPDUResponse(Client.NewAvatarID, m_badge, 
+                                        m_isAlertable, NetMessageStandard.TransactionID1, Client.NewAvatar);
+                                    await Client.SendData(Response.ToArray());
+
+                                    SentLoadAvatarByIDResponse = true;
+                                    m_Logger.Info("Sent LoadAvatarByIDResponsePDU: " +
+                                        Response.ToHexString());
                                 }
 
                                 break;
@@ -426,72 +439,100 @@ namespace TSO_E_Cityserver.Packets
 
         public static async void OnReceivedRSGZWrapperPDU(Client Client, VoltronPacket Packet)
         {
-            uint SendingAvatarID = Packet.ReadUInt32();
-            Packet.ReadUInt32(); //Unknown.
-            uint MsgSize = Packet.ReadUInt32();
-            MessageClsIDs MessageClsID = (MessageClsIDs)Packet.ReadUInt32();
-
-            switch (MessageClsID)
+            try
             {
-                case MessageClsIDs.cTSONetMessageStandard:
-                    Console.WriteLine("Received a cTSONetMessageStandard!");
-                    cTSONetMessageStandard NetMessageStandard = new cTSONetMessageStandard();
-                    NetMessageStandard.TransactionID1 = Packet.ReadInt16();
-                    NetMessageStandard.TransactionID2 = Packet.ReadInt16();
-                    NetMessageStandard.SendingAvatarID = Packet.ReadUInt32();
-                    NetMessageStandard.Flags = Packet.ReadByte();
-                    NetMessageStandard.MessageID = (cTSONetMessageStandardMsgIDs)Packet.ReadUInt32();
+                uint SendingAvatarID = Packet.ReadUInt32();
+                Packet.ReadUInt32(); //MessageID.
+                uint MsgSize = Packet.ReadUInt32();
+                MessageClsIDs MessageClsID = (MessageClsIDs)Packet.ReadUInt32();
 
-                    if ((NetMessageStandard.Flags & (1 << 1)) != 0)
-                        NetMessageStandard.Data1 = Packet.ReadUInt32();
-                    if ((NetMessageStandard.Flags & (1 << 2)) != 0)
-                        NetMessageStandard.Data2 = Packet.ReadUInt32();
-                    if ((NetMessageStandard.Flags & (1 << 3)) != 0)
-                        NetMessageStandard.Data3 = Packet.ReadUInt32();
-                    if ((NetMessageStandard.Flags & (1 << 5)) != 0)
-                    {
-                        uint ExtraClsID = Packet.ReadUInt32();
-                        NetMessageStandard.ExtraClsID = (ExtraClsRequestIDs)ExtraClsID;
-                        uint AvatarID;
+                switch (MessageClsID)
+                {
+                    case MessageClsIDs.cTSONetMessageStandard:
+                        Console.WriteLine("Received a cTSONetMessageStandard!");
+                        cTSONetMessageStandard NetMessageStandard = Packet.ReadcTSONetMessageStandard();
 
-                        switch (NetMessageStandard.ExtraClsID)
+                        if ((NetMessageStandard.Flags & (1 << 1)) != 0)
+                            NetMessageStandard.Data1 = Packet.ReadUInt32();
+                        if ((NetMessageStandard.Flags & (1 << 2)) != 0)
+                            NetMessageStandard.Data2 = Packet.ReadUInt32();
+                        if ((NetMessageStandard.Flags & (1 << 3)) != 0)
+                            NetMessageStandard.Data3 = Packet.ReadUInt32();
+                        if ((NetMessageStandard.Flags & (1 << 4)) != 0)
+                            NetMessageStandard.Data4 = Packet.ReadUInt32();
+                        if ((NetMessageStandard.Flags & (1 << 5)) != 0)
                         {
-                            case ExtraClsRequestIDs.TransmitCreateAvatarNotificationPDU:
-                                Console.WriteLine("Received TransmitCreateAvatarNotificationPDU!");
-                                Packet.ReadUInt32(); //SendingAvatarID
+                            uint ExtraClsID = Packet.ReadUInt32();
+                            NetMessageStandard.ExtraClsID = (ExtraClsRequestIDs)ExtraClsID;
 
-                                Avatar Av = new Avatar();
-                                Av.Name = Packet.ReadString();
-                                Av.Description = Packet.ReadString();
+                            switch (NetMessageStandard.ExtraClsID)
+                            {
+                                case ExtraClsRequestIDs.TSOAvatarCreationRequest:
+                                    Console.WriteLine("Received TransmitCreateAvatarNotificationPDU!");
+                                    Packet.ReadUInt32(); //Version
 
-                                Console.WriteLine("Name:" + Av.Name);
-                                Console.WriteLine("Description: " + Av.Description);
-                                Console.WriteLine(Packet.ReadString());
-                                
-                                Av.Gender = Packet.ReadByte();
-                                Av.SkinColor = Packet.ReadByte();
+                                    Avatar Av = new Avatar();
+                                    Av.Name = Packet.ReadString();
+                                    Av.Description = Packet.ReadString();
 
-                                Console.WriteLine("Gender: " + ((Av.Gender == 0) ? "male" : "female"));
+                                    Console.WriteLine("Name:" + Av.Name);
+                                    Console.WriteLine("Description: " + Av.Description);
 
-                                Av.HeadOutfitID = Packet.ReadUInt64().ToString("X8");
-                                Av.BodyNormalID = Packet.ReadUInt64().ToString("X8");
-                                Av.BodySwimWearID = Packet.ReadUInt64().ToString("X8");
-                                Av.BodySleepWearID = Packet.ReadUInt64().ToString("X8");
+                                    Av.Gender = Packet.ReadByte();
+                                    Av.SkinColor = Packet.ReadByte();
 
-                                Packet.ReadUInt32(); //ClsID?
+                                    Console.WriteLine("Gender: " + ((Av.Gender == 0) ? "male" : "female"));
 
-                                RefpackStream RefStream = new RefpackStream(Packet.Decompress(), true);
+                                    Av.HeadOutfitID = Packet.ReadUInt64().ToString("X8");
+                                    Av.BodyNormalID = Packet.ReadUInt64().ToString("X8");
+                                    Av.BodySwimWearID = Packet.ReadUInt64().ToString("X8");
+                                    Av.BodySleepWearID = Packet.ReadUInt64().ToString("X8");
+                                    Av.BodyNudeID = Packet.ReadUInt64().ToString("X8");
 
-                                cTSONeighbor Neighbor = new cTSONeighbor(RefStream.Decompress());
+                                    Packet.ReadUInt32(); //ClsID
 
-                                await Client.SendData(new TransmitCreateAvatarNotificationPDUResponse(Neighbor.AvatarID).ToArray());
+                                    RefpackStream RefStream = new RefpackStream(Packet.Decompress(), true);
+                                    MemoryStream cTSONeighborBlob = (MemoryStream)RefStream.Decompress();
+                                    Av.cTSONeighborBlob = cTSONeighborBlob.ToArray();
+                                    cTSONeighborBlob.Dispose();
 
-                                break;
+                                    //cTSONeighbor Neighbor = new cTSONeighbor(RefStream.Decompress(), true);
+
+                                    Av.AvatarID = (uint)Guid.NewGuid().ToString().GetHashCode();
+                                    Client.TemporaryAvatarID = Av.AvatarID;
+
+                                    Av.PropertyID = 0;
+                                    DatabaseFacade.CreateAvatar(Av.AvatarID, Av.Name, Av.Description, 5000, 0, 10, 10,
+                                        "AlphaVille", Av.PropertyID, 0x1011, 0x1213, 0x1415, 0x1617, 0x1819, 0x1a1b, 0x1c1d,
+                                        0x1e1f, 0x2021, 0x2223, 0x2425, 0x2627, 0x00, 0x00, 5000, Av.HeadOutfitID,
+                                        Av.BodyNormalID, Av.BodySwimWearID, Av.BodySleepWearID, Av.BodyNudeID, 0,
+                                        0x84858687, 0x88898A8B, 0x8C8D8E8F, 0xbbbc, Av.cTSONeighborBlob);
+                                    Client.NewAvatar = Av;
+
+                                    //TODO: Is this thread-safe? Probably not :(
+                                    Client.HasCreatedNewAvatar = true;
+
+                                    TransmitCreateAvatarNotificationPDUResponse Response = new TransmitCreateAvatarNotificationPDUResponse(1, 1, 
+                                        NetMessageStandard.TransactionID1, Av.AvatarID);
+                                    await Client.SendData(Response.ToArray());
+                                    m_Logger.Info("Sent TransmitCreateAvatarNotificationPDUResponse: " + Response.ToHexString());
+
+                                    //Send a type 22 packet to retrieve the client's updated account
+                                    //with AccountID from the DB (see OnReceivedPacket22).
+                                    await Client.SendData(new Type22Packet().ToArray());
+                                    m_Logger.Info("Sent Type22 packet!");
+
+                                    break;
+                            }
                         }
-                    }
 
-                    break;
-            }
+                        break;
+                    }
+                }
+                catch(Exception E)
+                {
+                    m_Logger.Info("PacketParser.cs: Failed to parse packet: " + E.ToString());
+                }
         }
     }
 }

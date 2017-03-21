@@ -7,11 +7,12 @@ namespace TSO_E_Cityserver.Database
     /// </summary>
     public class Account
     {
+        public int PlayerID;
         public string Username;
         public string Password; //A hashed version of the password.
-        public uint AuthTicket;
+        public string SessionID;
         public int PreferedLanguageID;
-        public string AvatarID1, AvatarID2, AvatarID3;
+        public uint AvatarID1 = 0, AvatarID2 = 0, AvatarID3 = 0;
         public Avatar[] Avatars;
     }
 }
