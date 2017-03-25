@@ -25,6 +25,7 @@ namespace TSO_E_Cityserver
 
         //This is the value set in HostOnlinePDU specifying the host's maximum packet size.
         private static int BUFFER_SIZE = 32767;
+        //Aries packet type and size for the current packet being processed.
         private uint PacketType, PacketSize;
 
         private Socket m_Socket;
@@ -154,19 +155,19 @@ namespace TSO_E_Cityserver
             }
         }
 
-        private void ProcessBuffer(Client Client)
+        private void ProcessBuffer(Client C)
         {
             while(m_CurrentlyReceived >= PacketSize)
             {
                 byte[] PacketBuf = new byte[PacketSize];
-                Array.Copy(Client.Buffer, PacketBuf, PacketSize);
+                Array.Copy(C.Buffer, PacketBuf, PacketSize);
 
                 if (PacketType != 0)
                 {
-                    lock (Client.ReceivedPackets)
-                        Client.ReceivedPackets.Enqueue(new AriesPacket(PacketBuf, true));
+                    lock (C.ReceivedPackets)
+                        C.ReceivedPackets.Enqueue(new AriesPacket(PacketBuf, true));
 
-                    ReceivedData?.Invoke(this, Client);
+                    ReceivedData?.Invoke(this, C);
 
                     m_CurrentlyReceived -= (int)PacketSize;
                 }
@@ -175,13 +176,15 @@ namespace TSO_E_Cityserver
                     VoltronHeader Header = ReadVoltronHeader(PacketBuf, 12);
 
                     if (Header.PacketSize < (PacketBuf.Length - 12))
-                        ProcessVoltronPackets(Client, PacketBuf);
+                        ProcessVoltronPackets(C, PacketBuf);
                     else
                     {
-                        lock (Client.ReceivedPackets)
-                            Client.ReceivedPackets.Enqueue(new VoltronPacket(PacketBuf, true));
+                        lock (C.ReceivedPackets)
+                        {
+                            C.ReceivedPackets.Enqueue(new VoltronPacket(PacketBuf, true));
+                        }
 
-                        ReceivedData?.Invoke(this, Client);
+                        ReceivedData?.Invoke(this, C);
                     }
 
                     m_CurrentlyReceived -= (int)PacketSize;
@@ -190,16 +193,16 @@ namespace TSO_E_Cityserver
                 if (m_CurrentlyReceived > 0)
                 {
                     byte[] Remainder = new byte[m_CurrentlyReceived];
-                    Array.ConstrainedCopy(Client.Buffer, (Client.Buffer.Length - m_CurrentlyReceived) + 1,
+                    Array.ConstrainedCopy(C.Buffer, (C.Buffer.Length - m_CurrentlyReceived) + 1,
                         Remainder, 0, m_CurrentlyReceived);
 
                     //Recreate the packet buffer and copy the remainder back into it.
-                    Client.CreateBuffer(BUFFER_SIZE);
-                    Array.Copy(Remainder, Client.Buffer, m_CurrentlyReceived);
+                    C.CreateBuffer(BUFFER_SIZE);
+                    Array.Copy(Remainder, C.Buffer, m_CurrentlyReceived);
                     Remainder = null;
                 }
                 else
-                    Client.CreateBuffer(BUFFER_SIZE);
+                    C.CreateBuffer(BUFFER_SIZE);
             }
         }
 
@@ -207,33 +210,92 @@ namespace TSO_E_Cityserver
         /// Multiple Voltron packets were sent in a Aries frame.
         /// </summary>
         /// <param name="PacketBuf">The packet buffer containing the packets to process.</param>
-        private void ProcessVoltronPackets(Client Client, byte[] PacketBuf)
+        private void ProcessVoltronPackets(Client C, byte[] PacketBuf)
         {
             VoltronHeader Header = ReadVoltronHeader(PacketBuf, 12);
 
             MemoryStream AriesStream = new MemoryStream(PacketBuf);
-            EndianBinaryReader Reader = new EndianBinaryReader(new BigEndianBitConverter(), AriesStream);
+            EndianBinaryReader Reader = new EndianBinaryReader(new LittleEndianBitConverter(), AriesStream);
             int Remaining = (int)AriesStream.Length - 12;
 
             byte[] AriesHeader = Reader.ReadBytes(12); //Aries header.
 
+            Reader = new EndianBinaryReader(new BigEndianBitConverter(), AriesStream);
+            Reader.BaseStream.Position = 12; //We've already read the header.
+
             while (Header.PacketSize < Remaining)
             {
-                byte[] VoltronBody = Reader.ReadBytes((int)Header.PacketSize);
-                VoltronPacket Packet = new VoltronPacket(ReconstructVoltronPacket(AriesHeader, 
-                    VoltronBody), true);
+                byte[] VoltronData = Reader.ReadBytes((int)Header.PacketSize);
+                if (Header.PacketType == 0x0044)
+                {
+                    SplitBufferPDU SplitBufferPacket;
 
-                lock (Client.ReceivedPackets)
-                    Client.ReceivedPackets.Enqueue(Packet);
+                    SplitBufferPacket = new SplitBufferPDU(VoltronData, false);
+
+                    lock (C.ReceivedSplitBuffers)
+                        C.ReceivedSplitBuffers.Enqueue(SplitBufferPacket);
+
+                    if (SplitBufferPacket.EOF == 1)
+                        CompileVoltronPackets(C);
+                }
+                else
+                {
+                    VoltronPacket Packet = new VoltronPacket(ReconstructVoltronPacket(AriesHeader,
+                        VoltronData), true);
+
+                    lock (C.ReceivedPackets)
+                        C.ReceivedPackets.Enqueue(Packet);
+                }
 
                 Remaining -= (int)Header.PacketSize;
 
-                if(Header.PacketSize < Remaining)
+                if (Header.PacketSize < Remaining)
                     Header = ReadVoltronHeader(AriesStream.ToArray(), (int)(AriesStream.Position));
             }
 
             Reader.Close();
-            ReceivedData?.Invoke(this, Client);
+            ReceivedData?.Invoke(this, C);
+        }
+
+        private void CompileVoltronPackets(Client C)
+        {
+            MemoryStream OutputStream = new MemoryStream();
+            EndianBinaryReader Reader;
+            EndianBinaryWriter Writer;
+
+            AriesHeader AHeader = new AriesHeader();
+            AHeader.PacketSize = PacketSize;
+            AHeader.PacketType = PacketType;
+
+            //Reassemble all the Voltron packets.
+            for(int i = 0; i < C.ReceivedSplitBuffers.Count; i++)
+            {
+                SplitBufferPDU SplitBuffer;
+                C.ReceivedSplitBuffers.TryDequeue(out SplitBuffer);
+
+                Reader = new EndianBinaryReader(new BigEndianBitConverter(), OutputStream);
+                Writer = new EndianBinaryWriter(new BigEndianBitConverter(), OutputStream);
+
+                Writer.Write(Reader.ReadBytes((int)SplitBuffer.FragmentSize));
+                Writer.Flush();
+            }
+
+            MemoryStream VoltronPackets = new MemoryStream(OutputStream.ToArray());
+            uint BufSize = (uint)VoltronPackets.Length;
+
+            for(int i = 0; i < BufSize; i++)
+            {
+                Reader = new EndianBinaryReader(new BigEndianBitConverter(), VoltronPackets);
+                VoltronHeader Header = ReadVoltronHeader(Reader.ReadBytes(12));
+                Reader.BaseStream.Position = 0; //Backtrack to beginning of stream.
+
+                VoltronPacket VPacket = new VoltronPacket(
+                    ReconstructVoltronPacket(AHeader, Reader.ReadBytes((int)Header.PacketSize)), true);
+                C.ReceivedPackets.Enqueue(VPacket);
+                BufSize -= Header.PacketSize;
+
+                ReceivedData?.Invoke(this, C);
+            }
         }
 
         /// <summary>
@@ -245,9 +307,39 @@ namespace TSO_E_Cityserver
         private byte[] ReconstructVoltronPacket(byte[] AriesHeader, byte[] VoltronPacket)
         {
             MemoryStream OutputStream = new MemoryStream();
-            BinaryWriter Writer = new BinaryWriter(OutputStream);
+            EndianBinaryWriter Writer = new EndianBinaryWriter(new LittleEndianBitConverter(),
+                OutputStream);
 
             Writer.Write(AriesHeader);
+            Writer.Flush();
+
+            Writer = new EndianBinaryWriter(new BigEndianBitConverter(), OutputStream);
+
+            Writer.Write(VoltronPacket);
+            Writer.Flush();
+
+            return OutputStream.ToArray();
+        }
+
+        /// <summary>
+        /// Reconstructs a (full) Voltron packet in memory.
+        /// </summary>
+        /// <param name="AriesHeader">The header of an aries packet.</param>
+        /// <param name="VoltronPacket">The body (and header) of a Voltron packet.</param>
+        /// <returns>A Voltron packet with its corresponding Aries header.</returns>
+        private byte[] ReconstructVoltronPacket(AriesHeader AHeader, byte[] VoltronPacket)
+        {
+            MemoryStream OutputStream = new MemoryStream();
+            EndianBinaryWriter Writer = new EndianBinaryWriter(new LittleEndianBitConverter(),
+                OutputStream);
+
+            Writer.Write(AHeader.PacketType);
+            Writer.Write(AHeader.Timestamp);
+            Writer.Write(AHeader.PacketSize);
+            Writer.Flush();
+
+            Writer = new EndianBinaryWriter(new BigEndianBitConverter(), OutputStream);
+
             Writer.Write(VoltronPacket);
             Writer.Flush();
 
@@ -267,6 +359,12 @@ namespace TSO_E_Cityserver
             return Header;
         }
 
+        /// <summary>
+        /// Reads a Voltron header from a byte buffer.
+        /// </summary>
+        /// <param name="Buffer">The buffer to read from.</param>
+        /// <param name="Position">The position in the buffer to read from (optional).</param>
+        /// <returns>A VoltronHeader instance.</returns>
         private VoltronHeader ReadVoltronHeader(byte[] Buffer, int Position = 0)
         {
             VoltronHeader Header = new VoltronHeader();
