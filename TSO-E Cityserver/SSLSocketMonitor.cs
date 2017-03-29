@@ -26,7 +26,8 @@ namespace TSO_E_Cityserver
         //This is the value set in HostOnlinePDU specifying the host's maximum packet size.
         private static int BUFFER_SIZE = 32767;
         //Aries packet type and size for the current packet being processed.
-        private uint PacketType, PacketSize;
+        private uint m_PacketType, m_PacketSize;
+        private object m_LockingObj = new object();
 
         private Socket m_Socket;
 
@@ -125,84 +126,91 @@ namespace TSO_E_Cityserver
 
         private void ReceiveData(IAsyncResult result)
         {
-            var resultWrapper = (Client)result.AsyncState;
-            try
+            lock (m_LockingObj) //The following code won't execute unless it's able to acquire a lock.
             {
-                var size = resultWrapper.EndRead(result);
-                m_CurrentlyReceived += size;
-
-                if (m_CurrentlyReceived >= HEADER_SIZE)
+                var resultWrapper = (Client)result.AsyncState;
+                try
                 {
-                    AriesHeader Header = ReadAriesHeader((byte[])resultWrapper.Buffer.Clone());
-                    PacketType = Header.PacketType;
-                    PacketSize = Header.PacketSize;
+                    var size = resultWrapper.EndRead(result);
+                    m_CurrentlyReceived += size;
 
-                    if(m_CurrentlyReceived >= PacketSize)
+                    if (m_CurrentlyReceived >= HEADER_SIZE)
                     {
-                        ProcessBuffer(resultWrapper);
+                        AriesHeader Header = ReadAriesHeader((byte[])resultWrapper.Buffer.Clone());
 
-                        resultWrapper.BeginRead(ReceiveData);
+                        m_PacketType = Header.PacketType;
+                        m_PacketSize = Header.PacketSize;
+
+                        if (m_CurrentlyReceived >= m_PacketSize)
+                        {
+                            ProcessBuffer(resultWrapper);
+
+                            resultWrapper.BeginRead(ReceiveData);
+                        }
                     }
+                    else
+                        resultWrapper.BeginRead(ReceiveData);
                 }
-                else
-                    resultWrapper.BeginRead(ReceiveData);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-                Disconnected?.Invoke(this, resultWrapper);
-                resultWrapper.CloseAndDisposeSslStream();
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    Disconnected?.Invoke(this, resultWrapper);
+                    resultWrapper.CloseAndDisposeSslStream();
+                }
             }
         }
 
         private void ProcessBuffer(Client C)
         {
-            while(m_CurrentlyReceived >= PacketSize)
+            lock (m_LockingObj) //The following code won't execute unless it's able to acquire a lock.
             {
-                byte[] PacketBuf = new byte[PacketSize];
-                Array.Copy(C.Buffer, PacketBuf, PacketSize);
-
-                if (PacketType != 0)
+                while (m_CurrentlyReceived >= m_PacketSize)
                 {
-                    lock (C.ReceivedPackets)
-                        C.ReceivedPackets.Enqueue(new AriesPacket(PacketBuf, true));
+                    byte[] PacketBuf = new byte[m_PacketSize];
+                    Array.Copy(C.Buffer, PacketBuf, m_PacketSize);
 
-                    ReceivedData?.Invoke(this, C);
-
-                    m_CurrentlyReceived -= (int)PacketSize;
-                }
-                else
-                {
-                    VoltronHeader Header = ReadVoltronHeader(PacketBuf, 12);
-
-                    if (Header.PacketSize < (PacketBuf.Length - 12))
-                        ProcessVoltronPackets(C, PacketBuf);
-                    else
+                    if (m_PacketType != 0)
                     {
                         lock (C.ReceivedPackets)
-                        {
-                            C.ReceivedPackets.Enqueue(new VoltronPacket(PacketBuf, true));
-                        }
+                            C.ReceivedPackets.Enqueue(new AriesPacket(PacketBuf, true));
+
+                        m_CurrentlyReceived -= (int)m_PacketSize;
 
                         ReceivedData?.Invoke(this, C);
                     }
+                    else
+                    {
+                        VoltronHeader Header = ReadVoltronHeader(PacketBuf, 12);
 
-                    m_CurrentlyReceived -= (int)PacketSize;
+                        if (Header.PacketSize < (PacketBuf.Length - 12))
+                            ProcessVoltronPackets(C, PacketBuf);
+                        else
+                        {
+                            lock (C.ReceivedPackets)
+                            {
+                                C.ReceivedPackets.Enqueue(new VoltronPacket(PacketBuf, true));
+                            }
+
+                            ReceivedData?.Invoke(this, C);
+                        }
+
+                        m_CurrentlyReceived -= (int)m_PacketSize;
+                    }
+
+                    if (m_CurrentlyReceived > 0)
+                    {
+                        byte[] Remainder = new byte[m_CurrentlyReceived];
+                        Array.ConstrainedCopy(C.Buffer, (C.Buffer.Length - m_CurrentlyReceived) + 1,
+                            Remainder, 0, m_CurrentlyReceived);
+
+                        //Recreate the packet buffer and copy the remainder back into it.
+                        C.CreateBuffer(BUFFER_SIZE);
+                        Array.Copy(Remainder, C.Buffer, m_CurrentlyReceived);
+                        Remainder = null;
+                    }
+                    else
+                        C.CreateBuffer(BUFFER_SIZE);
                 }
-
-                if (m_CurrentlyReceived > 0)
-                {
-                    byte[] Remainder = new byte[m_CurrentlyReceived];
-                    Array.ConstrainedCopy(C.Buffer, (C.Buffer.Length - m_CurrentlyReceived) + 1,
-                        Remainder, 0, m_CurrentlyReceived);
-
-                    //Recreate the packet buffer and copy the remainder back into it.
-                    C.CreateBuffer(BUFFER_SIZE);
-                    Array.Copy(Remainder, C.Buffer, m_CurrentlyReceived);
-                    Remainder = null;
-                }
-                else
-                    C.CreateBuffer(BUFFER_SIZE);
             }
         }
 
@@ -254,6 +262,7 @@ namespace TSO_E_Cityserver
             }
 
             Reader.Close();
+
             ReceivedData?.Invoke(this, C);
         }
 
@@ -264,8 +273,8 @@ namespace TSO_E_Cityserver
             EndianBinaryWriter Writer;
 
             AriesHeader AHeader = new AriesHeader();
-            AHeader.PacketSize = PacketSize;
-            AHeader.PacketType = PacketType;
+            AHeader.PacketSize = m_PacketSize;
+            AHeader.PacketType = m_PacketType;
 
             //Reassemble all the Voltron packets.
             for(int i = 0; i < C.ReceivedSplitBuffers.Count; i++)
