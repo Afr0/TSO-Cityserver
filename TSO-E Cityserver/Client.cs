@@ -25,6 +25,7 @@ namespace TSO_E_Cityserver
         private SslStream m_sslStream;
 
         public ConcurrentQueue<AriesPacket> ReceivedPackets = new ConcurrentQueue<AriesPacket>();
+        public ConcurrentQueue<SplitBufferPDU> ReceivedSplitBuffers = new ConcurrentQueue<SplitBufferPDU>();
         public byte[] Buffer { get; private set; }
 
         public ClientVersionInfo VersionInfo = new ClientVersionInfo();
