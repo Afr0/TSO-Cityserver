@@ -96,10 +96,14 @@
     <Compile Include="Database\Database.cs" />
     <Compile Include="Database\DBDataReaderExtensions.cs" />
     <Compile Include="Database\LanguageCodes.cs" />
+    <Compile Include="Database\SimProperty.cs" />
     <Compile Include="Packets\AriesPacket.cs" />
     <Compile Include="Packets\ClientVersionInfo.cs" />
     <Compile Include="Packets\Constants\cTSONetMessageStandardMsgIDs.cs" />
     <Compile Include="Packets\Constants\ExtraClsIDs.cs" />
+    <Compile Include="Packets\Constants\PreAlphaConstants.cs" />
+    <Compile Include="Packets\MyAvatarResponse.cs" />
+    <Compile Include="Packets\SplitBufferPDU.cs" />
     <Compile Include="Refpack\Decompresser.cs" />
     <Compile Include="Packets\HostOnlinePDU.cs" />
     <Compile Include="Packets\LoadAvatarByIDPDUResponse.cs" />
@@ -113,6 +117,7 @@
     <Compile Include="Packets\VoltronPacket.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Refpack\DecompressionException.cs" />
     <Compile Include="Refpack\RefpackStream.cs" />
     <Compile Include="Client.cs" />
     <Compile Include="SSLSocketMonitor.cs" />
