@@ -27,6 +27,7 @@ namespace TSO_E_Cityserver
         public ConcurrentQueue<AriesPacket> ReceivedPackets = new ConcurrentQueue<AriesPacket>();
         public ConcurrentQueue<SplitBufferPDU> ReceivedSplitBuffers = new ConcurrentQueue<SplitBufferPDU>();
         public byte[] Buffer { get; private set; }
+        public byte[] SlushBuffer { get; private set; }
 
         public ClientVersionInfo VersionInfo = new ClientVersionInfo();
         public Account PlayerAccount;
@@ -74,16 +75,30 @@ namespace TSO_E_Cityserver
             m_sslStream.EndAuthenticateAsServer(result);
         }
 
-        public void CreateBuffer(int size)
+        /// <summary>
+        /// Creates a new receiving buffer for this client.
+        /// </summary>
+        /// <param name="Size">The size of the buffer.</param>
+        public void CreateBuffer(int Size)
         {
-            Buffer = new byte[size];
+            Buffer = new byte[Size];
+        }
+
+        /// <summary>
+        /// Creates a new slush buffer for this client.
+        /// A slush buffer is the buffer storing partial packets.
+        /// </summary>
+        /// <param name="Size">The size of the buffer.</param>
+        public void CreateSlushBuffer(int Size)
+        {
+            SlushBuffer = new byte[Size];
         }
 
         public void BeginRead(AsyncCallback receiveData)
         {
-            if (Buffer == null)
+            if (Buffer == null || SlushBuffer == null)
             {
-                throw new ApplicationException("Buffer has not been set.");
+                throw new ApplicationException("Buffer(s) have not been set.");
             }
 
             m_sslStream.BeginRead(Buffer, 0, Buffer.Length, receiveData, this);

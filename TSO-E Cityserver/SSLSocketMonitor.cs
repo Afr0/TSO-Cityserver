@@ -103,6 +103,7 @@ namespace TSO_E_Cityserver
                     {
                         //resultWrapper.CreateBuffer(5);
                         resultWrapper.CreateBuffer(BUFFER_SIZE);
+                        resultWrapper.CreateSlushBuffer(BUFFER_SIZE);
                         resultWrapper.BeginRead(ReceiveData);
                     }
                 }
@@ -123,6 +124,7 @@ namespace TSO_E_Cityserver
         //Packet type (8), timestamp (8) and payload size (8)
         private static readonly uint HEADER_SIZE = 12;
         private int m_CurrentlyReceived = 0;
+        private bool m_PartialPacketReceived = false;
 
         private void ReceiveData(IAsyncResult result)
         {
@@ -136,7 +138,12 @@ namespace TSO_E_Cityserver
 
                     if (m_CurrentlyReceived >= HEADER_SIZE)
                     {
-                        AriesHeader Header = ReadAriesHeader((byte[])resultWrapper.Buffer.Clone());
+                        AriesHeader Header;
+
+                        if (!m_PartialPacketReceived)
+                            Header = ReadAriesHeader((byte[])resultWrapper.Buffer.Clone());
+                        else
+                            Header = ReadAriesHeader((byte[])resultWrapper.SlushBuffer.Clone());
 
                         m_PacketType = Header.PacketType;
                         m_PacketSize = Header.PacketSize;
@@ -167,7 +174,18 @@ namespace TSO_E_Cityserver
                 while (m_CurrentlyReceived >= m_PacketSize)
                 {
                     byte[] PacketBuf = new byte[m_PacketSize];
-                    Array.Copy(C.Buffer, PacketBuf, m_PacketSize);
+
+                    if (!m_PartialPacketReceived)
+                    {
+                        Array.Copy(C.Buffer, PacketBuf, m_PacketSize);
+                    }
+                    else
+                    {
+                        Array.Copy(C.SlushBuffer, PacketBuf, C.SlushBuffer.Length - 1);
+                        Array.Copy(C.Buffer, PacketBuf, (m_PacketSize - (C.SlushBuffer.Length - 1)));
+                        C.CreateSlushBuffer(BUFFER_SIZE);
+                        m_PartialPacketReceived = false;
+                    }
 
                     if (m_PacketType != 0)
                     {
@@ -182,14 +200,12 @@ namespace TSO_E_Cityserver
                     {
                         VoltronHeader Header = ReadVoltronHeader(PacketBuf, 12);
 
-                        if (Header.PacketSize < (PacketBuf.Length - 12))
+                        if (Header.PacketSize < ((PacketBuf.Length - 1) - 12))
                             ProcessVoltronPackets(C, PacketBuf);
                         else
                         {
                             lock (C.ReceivedPackets)
-                            {
                                 C.ReceivedPackets.Enqueue(new VoltronPacket(PacketBuf, true));
-                            }
 
                             ReceivedData?.Invoke(this, C);
                         }
@@ -203,10 +219,10 @@ namespace TSO_E_Cityserver
                         Array.ConstrainedCopy(C.Buffer, (C.Buffer.Length - m_CurrentlyReceived) + 1,
                             Remainder, 0, m_CurrentlyReceived);
 
-                        //Recreate the packet buffer and copy the remainder back into it.
                         C.CreateBuffer(BUFFER_SIZE);
-                        Array.Copy(Remainder, C.Buffer, m_CurrentlyReceived);
+                        Array.Copy(Remainder, C.SlushBuffer, m_CurrentlyReceived);
                         Remainder = null;
+                        m_PartialPacketReceived = true;
                     }
                     else
                         C.CreateBuffer(BUFFER_SIZE);
@@ -224,7 +240,7 @@ namespace TSO_E_Cityserver
 
             MemoryStream AriesStream = new MemoryStream(PacketBuf);
             EndianBinaryReader Reader = new EndianBinaryReader(new LittleEndianBitConverter(), AriesStream);
-            int Remaining = (int)AriesStream.Length - 12;
+            int Remaining = (int)(AriesStream.Length - 1) - 12;
 
             byte[] AriesHeader = Reader.ReadBytes(12); //Aries header.
 
