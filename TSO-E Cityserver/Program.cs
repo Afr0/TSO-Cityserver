@@ -48,20 +48,21 @@ namespace TSO_E_Cityserver
             if(!DatabaseFacade.CreateTables())
             {
                 Console.ReadLine();
-                Environment.Exit(0);
+                Environment.Exit(0); 
             }
 
-            Console.WriteLine("Success!\n Creating master account...");
-            DatabaseFacade.CreateAccount(1, "asdf", "hjkl", "2002", 10, "1337", "0", "0");
+            DatabaseFacade.CreateServer(1, "Alphaville", 49, 1, 6, "Up", 2, 0, "Afr0", "Happy hacking!",
+                "Welcome to Alphaville, hosted by Donald Trump Has Tiny Hands!");
 
-            DatabaseFacade.CreateCityserver(1, "Alphaville", 49, 1, "Up", 2, 0, "Afr0", "Welcome!",
-                "This server is hosted by Donald Trump Has Small Hands!");
+            Console.WriteLine("Success!\n Creating master account...");
+            DatabaseFacade.CreateAccount(1, "asdf", "hjkl", 10, 1337, 0, 0);
 
             //Test...
-            DatabaseFacade.CreateAvatar(1337, "Donald Trump", "", 5000, 0, 10, 10, "AlphaVille",
+            DatabaseFacade.CreateAvatar(1337, "Donald Trump", "", 5000, 0, 10, 10, "AlphaVille", 0,
                 0x1011, 0x1213, 0x1415, 0x1617, 0x1819, 0x1a1b, 0x1c1d, 0x1e1f, 0x2021, 0x2223, 0x2425,
                 0x2627, 0x00, 0x00, 5000, /*"0x000003A10000000D"*/"0x0000018D0000000D", /*"0x0000024A0000000D"*/"0x0000030000000D", "0x000002B70000000D", 
-                "0x000002B60000000D","0x0000024E0000000D", 0, 0x84858687, 0x88898A8B, 0x8C8D8E8F, 0xbbbc);
+                "0x000002B60000000D","0x0000024E0000000D", 0, 0x84858687, 0x88898A8B, 0x8C8D8E8F, 0xbbbc, 
+                new byte[] { 0, 0, 0 });
 
             Console.WriteLine("Success!");
 
@@ -71,26 +72,26 @@ namespace TSO_E_Cityserver
             m_SSLSocket.InitializeSocket();
         }
 
-        private static async void M_SSLSocket_Connected(object sender, Client e)
+        private static async void M_SSLSocket_Connected(object sender, Client Client)
         {
-            if (e.IsAuthenticated())
+            if (Client.IsAuthenticated())
             {
                 Console.WriteLine("Received new authenticated connection!");
-                m_Sockets.TryAdd(m_ConnectionIDs, e);
+                m_Sockets.TryAdd(m_ConnectionIDs, Client);
 
                 //This is static, so can only be accessed by one thread at a time.
                 m_ConnectionIDs++;
 
-                await e.SendData(new Type22Packet().ToArray());
+                await Client.SendData(new Type22Packet().ToArray());
             }
         }
 
-        private static /*async*/ void M_SSLSocket_ReceivedData(object sender, Client e)
+        private static void M_SSLSocket_ReceivedData(object sender, Client Client)
         {
             AriesPacket ReceivedPacket;
             VoltronPacket VPacket;
 
-            while (e.ReceivedPackets.TryDequeue(out ReceivedPacket))
+            while (Client.ReceivedPackets.TryDequeue(out ReceivedPacket))
             {
                 switch (ReceivedPacket.PacketType)
                 {
@@ -101,7 +102,7 @@ namespace TSO_E_Cityserver
                         {
                             case 0x000a:
                                 Console.WriteLine("Received ClientOnlinePDU!");
-                                PacketParser.OnReceivedClientOnlinePDU(e, VPacket);
+                                PacketParser.OnReceivedClientOnlinePDU(Client, VPacket);
                                 break;
                             case 0x0032:
                                 Console.WriteLine("Received SetAcceptAlertsPDU!");
@@ -126,18 +127,18 @@ namespace TSO_E_Cityserver
                                 break;
                             case 0x2712:
                                 Console.WriteLine("Received DBRequestWrapperPDU!");
-                                PacketParser.OnReceivedDBRequestWrapperPDU(e, VPacket);
+                                PacketParser.OnReceivedDBRequestWrapperPDU(Client, VPacket);
                                 break;
                             case 0x2729:
                                 Console.WriteLine("Received ComponentVersionRequestPDU!");
                                 break;
                             case 0x2730:
                                 Console.WriteLine("Received RSGZWrapperPDU!");
-                                PacketParser.OnReceivedRSGZWrapperPDU(e, VPacket);
+                                PacketParser.OnReceivedRSGZWrapperPDU(Client, VPacket);
                                 break;
                             case 0x2734:
                                 Console.WriteLine("Received DataServiceWrapperPDU!");
-                                PacketParser.OnReceivedDBServiceWrapperPDU(e, VPacket);
+                                PacketParser.OnReceivedDBServiceWrapperPDU(Client, VPacket);
                                 break;
                             case 0x271e:
                                 Console.WriteLine("Received GenericFlashRequestPDU!");
@@ -155,7 +156,7 @@ namespace TSO_E_Cityserver
                         break;
                     case 21:
                         Console.WriteLine("Received a type 21 packet!");
-                        PacketParser.OnReceivedPacket21(e, ReceivedPacket);
+                        PacketParser.OnReceivedPacket21(Client, ReceivedPacket);
                         break;
                     case 26:
                         Console.WriteLine("Received a type 26 packet - client experienced an error!");
