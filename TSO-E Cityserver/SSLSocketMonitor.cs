@@ -124,6 +124,7 @@ namespace TSO_E_Cityserver
         //Packet type (8), timestamp (8) and payload size (8)
         private static readonly uint HEADER_SIZE = 12;
         private int m_CurrentlyReceived = 0;
+        private int m_SizeOfSlush = 0; //Size of partial packet in the slush buffer.
         private bool m_PartialPacketReceived = false;
 
         private void ReceiveData(IAsyncResult result)
@@ -181,8 +182,8 @@ namespace TSO_E_Cityserver
                     }
                     else
                     {
-                        Array.Copy(C.SlushBuffer, PacketBuf, C.SlushBuffer.Length - 1);
-                        Array.Copy(C.Buffer, PacketBuf, (m_PacketSize - (C.SlushBuffer.Length - 1)));
+                        Array.ConstrainedCopy(C.SlushBuffer, 0, PacketBuf, 0, m_SizeOfSlush);
+                        Array.ConstrainedCopy(C.Buffer, 0, PacketBuf, m_SizeOfSlush, m_CurrentlyReceived);
                         C.CreateSlushBuffer(BUFFER_SIZE);
                         m_PartialPacketReceived = false;
                     }
@@ -218,6 +219,7 @@ namespace TSO_E_Cityserver
                         byte[] Remainder = new byte[m_CurrentlyReceived];
                         Array.ConstrainedCopy(C.Buffer, (C.Buffer.Length - m_CurrentlyReceived) + 1,
                             Remainder, 0, m_CurrentlyReceived);
+                        m_SizeOfSlush = m_CurrentlyReceived;
 
                         C.CreateBuffer(BUFFER_SIZE);
                         Array.Copy(Remainder, C.SlushBuffer, m_CurrentlyReceived);
