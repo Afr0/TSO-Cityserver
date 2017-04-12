@@ -156,8 +156,33 @@ namespace TSO_E_Cityserver
                             resultWrapper.BeginRead(ReceiveData);
                         }
                     }
-                    else
+                    else //Didn't receive a full packet yet, so keep receiving more.
+                    {
+                        //HOWEVER, not without buffering first.
+                        //No data has been received yet, so just create the slush buffer and buffer the received data.
+                        if(resultWrapper.SlushBuffer.Length == 0 || resultWrapper.SlushBuffer == null)
+                        {
+                            resultWrapper.CreateSlushBuffer(m_CurrentlyReceived);
+                            Array.ConstrainedCopy(resultWrapper.Buffer, 0, resultWrapper.SlushBuffer, 0, 
+                                m_CurrentlyReceived);
+
+                            m_SizeOfSlush = m_CurrentlyReceived;
+                            m_PartialPacketReceived = true;
+                        }
+                        else //Data HAS been received, so add the newly received data to the existing slush.
+                        {
+                            byte[] Slush = (byte[])resultWrapper.SlushBuffer.Clone();
+                            resultWrapper.CreateSlushBuffer(m_SizeOfSlush + size);
+
+                            Array.ConstrainedCopy(Slush, 0, resultWrapper.SlushBuffer, 0, m_SizeOfSlush);
+                            Array.ConstrainedCopy(resultWrapper.Buffer, 0, resultWrapper.SlushBuffer, m_SizeOfSlush, size);
+
+                            m_SizeOfSlush += size;
+                            m_PartialPacketReceived = true;
+                        }
+
                         resultWrapper.BeginRead(ReceiveData);
+                    }
                 }
                 catch (Exception e)
                 {
@@ -180,11 +205,14 @@ namespace TSO_E_Cityserver
                     {
                         Array.Copy(C.Buffer, PacketBuf, m_PacketSize);
                     }
-                    else
+                    else //The slushbuffer wasn't empty, so combine the two buffers into a packet buffer.
                     {
                         Array.ConstrainedCopy(C.SlushBuffer, 0, PacketBuf, 0, m_SizeOfSlush);
                         Array.ConstrainedCopy(C.Buffer, 0, PacketBuf, m_SizeOfSlush, m_CurrentlyReceived);
-                        C.CreateSlushBuffer(BUFFER_SIZE);
+
+                        C.CreateSlushBuffer(0);
+                        m_SizeOfSlush = 0;
+
                         m_PartialPacketReceived = false;
                     }
 
@@ -222,6 +250,7 @@ namespace TSO_E_Cityserver
                         m_SizeOfSlush = m_CurrentlyReceived;
 
                         C.CreateBuffer(BUFFER_SIZE);
+                        C.CreateSlushBuffer(m_SizeOfSlush);
                         Array.Copy(Remainder, C.SlushBuffer, m_CurrentlyReceived);
                         Remainder = null;
                         m_PartialPacketReceived = true;
@@ -248,7 +277,7 @@ namespace TSO_E_Cityserver
 
             Reader = new EndianBinaryReader(new BigEndianBitConverter(), AriesStream);
             Reader.BaseStream.Position = 12; //We've already read the header.
-
+            
             while (Header.PacketSize < Remaining)
             {
                 byte[] VoltronData = Reader.ReadBytes((int)Header.PacketSize);
